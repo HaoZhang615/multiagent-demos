@@ -1,0 +1,30 @@
+{
+    "Persona 1": {
+        "Name": "A",
+        "Age": "25-34",
+        "Gender": "male",
+        "Location": "Europe",
+        "Education": "Doctoral Degree",
+        "Employment": "Employed",
+        "Income": "120k-140k",
+        "Marital Status": "Married",
+        "Children": "1",
+        "Occupation": "Management",
+        "Hobbies": [],
+        "Backstory": ""
+    },
+    "Persona 2": {
+        "Name": "B",
+        "Age": "65+",
+        "Gender": "female",
+        "Location": "Africa",
+        "Education": "High School",
+        "Employment": "Employed",
+        "Income": "40k-60k",
+        "Marital Status": "Widowed",
+        "Children": "3",
+        "Occupation": "Management",
+        "Hobbies": [],
+        "Backstory": ""
+    }
+}
