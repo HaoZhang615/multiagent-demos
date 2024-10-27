@@ -50,19 +50,6 @@ llm_config = {
     ]
 }
 
-# dalle_config = {
-#     "config_list": [
-#         {
-#             "model":  dalle3_model,
-#             "base_url": api_base,
-#             "api_type": "azure",
-#             "api_version": api_version,
-#             # "max_tokens": 1000,
-#             "azure_ad_token_provider": token_provider
-#         }
-#     ]
-# }
-
 ## Simple Tool or Skill for this example. 
 ## A simple calculator that can perform addition, subtraction, multiplication, and division.
 ## Please reference this tutorial for more information https://microsoft.github.io/autogen/docs/tutorial/tool-use/ as this example pulls that directly

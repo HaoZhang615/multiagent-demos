@@ -4,7 +4,6 @@ from autogen import AssistantAgent, UserProxyAgent, register_function
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from datetime import datetime
 
-
 # Initialize the DefaultAzureCredential
 # This will be used to authenticate rather than use a key directly
 token_provider = get_bearer_token_provider(
@@ -101,6 +100,11 @@ register_function(
     description="A simple function to get today's date",  # A description of the tool.
 )       
 
+if 'chat_initiated' not in st.session_state:
+    st.session_state.chat_initiated = False
+
+chatresult = None
+
 # Creating a Streamlit container to hold the chat messages and the input 
 with st.container():
 
@@ -112,17 +116,19 @@ with st.container():
         asyncio.set_event_loop(loop)
 
         async def initiate_chat():
-            await user_proxy.initiate_chat(
-                message=user_input,
-                recipient=assistant,
-                max_consecutive_auto_reply=5,
-                is_termination_msg=lambda x: x.get("content", "").strip().endswith("TERMINATE"),
-                
+            try:
+                chatresult = user_proxy.initiate_chat(
+                    assistant,
+                    message=user_input,
+                    max_consecutive_auto_reply=5,
+                    is_termination_msg=lambda x: x.get("content", "").strip().endswith("TERMINATE"),
                 )
-            st.stop() 
+            except Exception as e:
+                st.error(f"An error occurred: {e}")
+        
         loop.run_until_complete(initiate_chat())
         loop.close()
-        st.session_state.chat_initiated = True  # Set the state to True after running the chat
-        
-st.stop()
+
+if st.session_state.chat_initiated:
+    st.write(chatresult)
         

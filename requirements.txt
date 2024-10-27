@@ -190,7 +190,7 @@ sniffio==1.3.1
     #   anyio
     #   httpx
     #   openai
-streamlit==1.35.0
+streamlit
 streamlit_extras
     # via -r requirements.in
 tenacity==8.5.0
@@ -226,3 +226,5 @@ urllib3==2.2.3
     #   requests
 watchdog==5.0.2
     # via streamlit
+
+promptflow
