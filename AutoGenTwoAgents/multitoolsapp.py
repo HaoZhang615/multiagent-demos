@@ -11,6 +11,8 @@ import json
 from dotenv import load_dotenv
 load_dotenv()
 
+# from promptflow.tracing import start_trace
+# start_trace()
 
 # This example pulls from this tutorial https://microsoft.github.io/autogen/docs/tutorial/tool-use/ and we added Streamlit to it. 
 # You could remove the UI aspect and just run it as a script.

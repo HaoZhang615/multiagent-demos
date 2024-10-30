@@ -23,7 +23,7 @@ This repository contains various demos showcasing the use of multiple agents in 
   - **multitoolsapp.py**: Application demonstrating multiple tools.
   - **two_agents_app.py**: Main application file for running two-agent demos.
 
-- **coder_output/**: Directory for storing output from the coder application.
+- **work_dir/**: Directory for accessing local file as input and storing output from the coder application.
 
 - **requirements.txt**: List of dependencies required to run the applications.
 

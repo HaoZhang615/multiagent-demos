@@ -57,7 +57,7 @@ user_proxy = TrackableUserProxyAgent(
         system_message="A helful AI Assistant.",
         code_execution_config={
             "last_n_messages": 2,
-            "work_dir": "coder_output",
+            "work_dir": "work_dir",
             "use_docker": True,
         },  # Please set use_docker=True if docker is available to run the generated code. 
             # Using docker is safer than running the generated code directly.
@@ -88,6 +88,7 @@ assistant = TrackableAssistantAgent(
             Suggest the full code instead of partial code or code changes. 
             If the error can't be fixed or if the task is not solved even after the code is executed successfully, analyze the problem, revisit your assumption, collect additional info you need, and think of a different approach to try.
             When you find an answer, verify the answer carefully. Include verifiable evidence in your response if possible.
+            If it is a data analysis task, output the result in a table or a chart whereever it is possible.
             Reply \"TERMINATE\" in the end when everything is done.""",
         )
 
