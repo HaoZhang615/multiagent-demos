@@ -1,8 +1,12 @@
+import tempfile
 import asyncio
 import streamlit as st
-from autogen import AssistantAgent, UserProxyAgent, register_function
+from autogen import ConversableAgent, AssistantAgent, UserProxyAgent, register_function
+from autogen.coding import DockerCommandLineCodeExecutor
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from datetime import datetime
+from io import StringIO
+import os
 
 # Initialize the DefaultAzureCredential
 # This will be used to authenticate rather than use a key directly
@@ -19,57 +23,76 @@ llm_config = {
             "base_url": "https://hz-aoai.openai.azure.com/",
             "api_type": "azure",
             "api_version": "2024-02-01",
-            "max_tokens": 1000,
+            "max_tokens": 2000,
             "azure_ad_token_provider": token_provider
         }
-    ]
+    ],
+    "temperature": 0, 
 }
+
+# # Create a temporary directory to store the code files.
+# temp_dir = tempfile.TemporaryDirectory()
+
+# Create a Docker command line code executor.
+executor = DockerCommandLineCodeExecutor(
+    image="python:3.12-slim",  # Execute code using the given docker image name.
+    timeout=10,  # Timeout for each code execution in seconds.
+    work_dir="work_dir",  # Use the temporary directory to store the code files.
+)
 
 # define function to get today's date as string format MMMM DD, YYYY
 def get_today_date() -> str:
     return datetime.today().strftime("%B %d, %Y")
 
-# We will create a class that extends the AssistantAgent class to track the messages sent by the assistant 
+# We will create a class that extends the ConversableAgent class to track the messages sent by the agent 
 # so we can tap it into the Streamlit chat messages.
-class TrackableAssistantAgent(AssistantAgent):        
+class TrackableConversableAgent(ConversableAgent):        
     def _process_received_message(self, message, sender, silent):
         with st.chat_message(sender.name):
             st.markdown(message)
         return super()._process_received_message(message, sender, silent)
-    
-
-# We will create a class that extends the AssistantAgent class to track the messages sent by the assistant 
-# so we can tap it into the Streamlit chat messages.
-class TrackableUserProxyAgent(UserProxyAgent):
-    def _process_received_message(self, message, sender, silent):
-        with st.chat_message(sender.name):
-            st.markdown(message)
-        return super()._process_received_message(message, sender, silent)
-
 
 # Set the title of the app
-st.title("Code Interpreter")
+st.title("2 Agents Chat App with coding capability")
 
-# Create a user proxy agent that will be used to interact with the user
-# Note that this agent can execute code. work_dir is the directory where the code will be executed.
-user_proxy = TrackableUserProxyAgent(
-        name="User_proxy",
-        system_message="A helful AI Assistant.",
-        code_execution_config={
-            "last_n_messages": 2,
-            "work_dir": "work_dir",
-            "use_docker": True,
-        },  # Please set use_docker=True if docker is available to run the generated code. 
-            # Using docker is safer than running the generated code directly.
-        human_input_mode="TERMINATE",
-        )
+# add a description on how to use the app
+st.markdown(f"""#### This app allows you to give a task to an AI assistant. A user proxy agent will do code execution and give feedback to the AI assistant on your behalf.""")
+st.markdown(f"""#### You can chat with the AI assistant and the user proxy agent by typing in the chat box below.""")
+st.markdown(f"""##### Optionally, you can upload a file from local (by clicking on the file upload element below) to reference in your task assignment.""")
+st.markdown(f"""##### The user proxy agent will use the uploaded file to ground the task solving process. Delete the file from the work directory by clicking on the *Clear work directory* button below.""")
 
-# Create a coder agent that will be used to solve the tasks  
-assistant = TrackableAssistantAgent(
-            name="Assistant",
-            llm_config=llm_config,
-            system_message="""You are a helpful AI assistant.
-            You have access to a tool: get_today_date.
+# Create a function to clear the work directory
+def clear_work_dir():
+    for file in os.listdir("work_dir"):
+        os.remove(os.path.join("work_dir", file))
+    return st.success("Work directory cleared.")
+# Create a button to clear the work directory
+if st.button("Clear work directory"):
+    clear_work_dir()
+
+
+def save_uploaded_file(uploadedfile):
+  with open(os.path.join("work_dir",uploadedfile.name),"wb") as f:
+     f.write(uploadedfile.getbuffer())
+  return st.success("Saved file :{} in work_dir".format(uploadedfile.name))
+
+uploaded_file = st.file_uploader("Choose a file to upload to work directory")
+if uploaded_file:
+    additional_instructions = f"use only the uploaded local file {uploaded_file.name} for the task"
+    # Apply Function here
+    save_uploaded_file(uploaded_file)
+else:
+    additional_instructions = ""
+
+# Create a code executor agent that uses docker to execute the code from code writer and surface back the result
+code_executor_agent = TrackableConversableAgent(
+    "code_executor",
+    llm_config=False,  # Turn off LLM for this agent.
+    code_execution_config={"executor": executor},  # Use the docker command line code executor.
+    human_input_mode="NEVER",  # Always take human input for this agent for safety.
+)
+
+code_writer_system_message=f"""You are a helpful AI assistant and today is {get_today_date()}.
             Solve tasks using your coding and language skills.
             In the following cases, suggest python code (in a python coding block) or shell script (in a sh coding block) for the user to execute.
             1. When you need to collect info, use the code to output the info you need, 
@@ -88,29 +111,29 @@ assistant = TrackableAssistantAgent(
             Suggest the full code instead of partial code or code changes. 
             If the error can't be fixed or if the task is not solved even after the code is executed successfully, analyze the problem, revisit your assumption, collect additional info you need, and think of a different approach to try.
             When you find an answer, verify the answer carefully. Include verifiable evidence in your response if possible.
-            If it is a data analysis task, output the result in a table or a chart whereever it is possible.
-            Reply \"TERMINATE\" in the end when everything is done.""",
-        )
+            If it is a data analysis task, output the result in a markdown table or a chart whereever possible.
+            {additional_instructions}
+            Reply \"TERMINATE\" in the end when everything is done."""
 
-# Register the get_today_date function as a tool. If you modify this you need to change the name, and the description. 
-register_function(
-    get_today_date,
-    caller=assistant,  # The assistant agent can suggest calls to the get_today_date.
-    executor=user_proxy,  # The user proxy agent can execute the calculator calls.
-    name="get_today_date",  # By default, the function name is used as the tool name.
-    description="A simple function to get today's date",  # A description of the tool.
-)       
-
+# Create a code writer agent that will be used to solve the tasks by writing code 
+code_writer_agent = TrackableConversableAgent(
+    "code_writer_agent",
+    system_message=code_writer_system_message,
+    llm_config=llm_config,
+    code_execution_config=False,  # Turn off code execution for this agent.
+    max_consecutive_auto_reply=20,
+    human_input_mode="NEVER",
+)
 if 'chat_initiated' not in st.session_state:
     st.session_state.chat_initiated = False
 
-chatresult = None
+chat_result = None
 
 # Creating a Streamlit container to hold the chat messages and the input 
 with st.container():
 
     # Create a chat input for the user to type in
-    user_input = st.chat_input("Type something...")
+    user_input = st.chat_input("Give me a task...")
     # If the user input is not empty, we will initiate the chat
     if user_input:
         loop = asyncio.new_event_loop()
@@ -118,10 +141,10 @@ with st.container():
 
         async def initiate_chat():
             try:
-                chatresult = user_proxy.initiate_chat(
-                    assistant,
+                chat_result = code_executor_agent.initiate_chat(
+                    code_writer_agent,
                     message=user_input,
-                    max_consecutive_auto_reply=5,
+                    max_consecutive_auto_reply=10,
                     is_termination_msg=lambda x: x.get("content", "").strip().endswith("TERMINATE"),
                 )
             except Exception as e:
@@ -129,7 +152,8 @@ with st.container():
         
         loop.run_until_complete(initiate_chat())
         loop.close()
+        executor.stop()
 
 if st.session_state.chat_initiated:
-    st.write(chatresult)
+    st.write(chat_result)
         

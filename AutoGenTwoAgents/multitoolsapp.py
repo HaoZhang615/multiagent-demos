@@ -3,7 +3,7 @@ import streamlit as st
 import asyncio
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from autogen import ConversableAgent, register_function
-from typing import Annotated, Literal
+from autogen.agentchat.contrib.multimodal_conversable_agent import MultimodalConversableAgent
 import requests
 from openai import AzureOpenAI
 from datetime import datetime
@@ -14,16 +14,6 @@ load_dotenv()
 # from promptflow.tracing import start_trace
 # start_trace()
 
-# This example pulls from this tutorial https://microsoft.github.io/autogen/docs/tutorial/tool-use/ and we added Streamlit to it. 
-# You could remove the UI aspect and just run it as a script.
-# To run this script you will need to make sure you have the packages installed (autogen, azure-identity, streamlit, asyncio) and you will need to have an Azure account with a Cognitive Services resource.
-# To run the app, you will use the command in your terminal: streamlit run toolsapp.py
-# You will need to replace the model, base_url, and api_version with your own values.
-# When the app is running it will open in a browser window and will take a few seconds to load. Once it is loaded you can type in the chat box and the AI will respond.
-# To test the tool that is shown here ( calculator ) you can type in the chat box something like "What is (44232 + 13312 / (232 - 32)) * 5?" and the AI will respond with the answer."
-# This helps illustrate how to use and register a tool with the AutoGen agents. 
-
-Operator = Literal["+", "-", "*", "/"]
 
 # Set the title of the app
 st.title("2 agents with multiple tools")
@@ -49,24 +39,11 @@ llm_config = {
             "max_tokens": 1000,
             "azure_ad_token_provider": token_provider
         }
-    ]
+    ],
+    "cache_seed": 42,
+    "temperature": 0.5, 
+    "max_tokens": 1000
 }
-
-## Simple Tool or Skill for this example. 
-## A simple calculator that can perform addition, subtraction, multiplication, and division.
-## Please reference this tutorial for more information https://microsoft.github.io/autogen/docs/tutorial/tool-use/ as this example pulls that directly
-
-def calculator(a: int, b: int, operator: Annotated[Operator, "operator"]) -> int:
-    if operator == "+":
-        return a + b
-    elif operator == "-":
-        return a - b
-    elif operator == "*":
-        return a * b
-    elif operator == "/":
-        return int(a / b)
-    else:
-        raise ValueError("Invalid operator")
     
 def web_searcher(query: str, up_to_date:bool=False) -> str:
 
@@ -130,7 +107,6 @@ class TrackableAssistantAgent(ConversableAgent):
         with st.chat_message(sender.name):
             st.markdown(message)
         return super()._process_received_message(message, sender, silent)
-    
 
 ## We need to extend the ConversableAgent class to track the conversation in Streamlit
 class TrackableUserProxyAgent(ConversableAgent):
@@ -139,12 +115,22 @@ class TrackableUserProxyAgent(ConversableAgent):
             st.markdown(message)
         return super()._process_received_message(message, sender, silent)
 
+## We need to extend the ConversableAgent class to track the conversation in Streamlit
+class TrackableMultimodalAssistantAgent(MultimodalConversableAgent):
+
+    def __init__(self, *args, skills=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.skills = skills or []
+    def _process_received_message(self, message, sender, silent):
+        with st.chat_message(sender.name):
+            st.markdown(message)
+        return super()._process_received_message(message, sender, silent)
 
 # Let's first define the assistant agent that suggests tool calls. You can modify for your own tools. 
 assistant = TrackableAssistantAgent(
     name="Assistant",
-    system_message="""You are a helpful AI assistant that help people with complext tasks.
-    You have access to 4 tools: calculator, web_searcher, image_generator and get_today_date.
+    system_message=f"""You are a helpful AI assistant that help people with complext tasks, today is {get_today_date()}.
+    You have access to 2 tools: web_searcher and image_generator.
     You can help with multistep tasks by making an execution plan and sequentially using the tools. 
     Reason step by step which actions to take to get to the answer.
     When you give the final answer, provide the key reasoning steps you took to get to the answer.
@@ -165,15 +151,13 @@ user_proxy = TrackableUserProxyAgent(
     human_input_mode="TERMINATE",
 )
 
+# image_agent = TrackableMultimodalAssistantAgent(
+#     name="image-explainer",
+#     max_consecutive_auto_reply=10,
+#     llm_config=llm_config,
+# )
+
 # Registering the functions
-# Register the calculator function as a tool. If you modify this you need to change the name, and the description. 
-register_function(
-    calculator,
-    caller=assistant,  # The assistant agent can suggest calls to the calculator.
-    executor=user_proxy,  # The user proxy agent can execute the calculator calls.
-    name="calculator",  # By default, the function name is used as the tool name.
-    description="A simple calculator",  # A description of the tool.
-)
 # Register the image_generator function as a tool. If you modify this you need to change the name, and the description. 
 register_function(
     image_generator,
@@ -189,14 +173,6 @@ register_function(
     executor=user_proxy,  # The user proxy agent can execute the calculator calls.
     name="web_searcher",  # By default, the function name is used as the tool name.
     description="A web searcher that calls Bing Search API to search the web and return a list of search result based on a query. If the query requires up-to-date information, overright the <up_to_date> parameter to 'true'",  # A description of the tool.
-)
-# Register the get_today_date function as a tool. If you modify this you need to change the name, and the description. 
-register_function(
-    get_today_date,
-    caller=assistant,  # The assistant agent can suggest calls to the calculator.
-    executor=user_proxy,  # The user proxy agent can execute the calculator calls.
-    name="get_today_date",  # By default, the function name is used as the tool name.
-    description="A simple function to get today's date",  # A description of the tool.
 )
 
 
